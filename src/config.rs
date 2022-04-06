@@ -59,7 +59,7 @@ where
 }
 
 ///watch the config file for wrtie event and update the internal config data
-async fn config_watcher<P, C>(path: P, config: &Lazy<RwLock<C>>) -> Result<()>
+async fn config_watcher<P, C>(path: P, _config: &Lazy<RwLock<C>>) -> Result<()>
 where
     P: AsRef<Path>,
     C: Config,
@@ -77,7 +77,7 @@ where
     })?;
     watcher.watch(path.as_ref(), RecursiveMode::Recursive)?;
     #[cfg(not(test))]
-    if let Err(err) = event_poll(_rx, &path, config).await {
+    if let Err(err) = event_poll(_rx, &path, _config).await {
         warn!(
             "an error occured in the watcher: {:?}\n trying to reload",
             err
