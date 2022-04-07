@@ -10,10 +10,9 @@ use notify::{
     RecommendedWatcher, RecursiveMode, Watcher,
 };
 use once_cell::sync::Lazy;
-use parking_lot::RwLock;
 use tokio::{
     runtime::Handle,
-    sync::mpsc::{channel, Receiver},
+    sync::{mpsc::{channel, Receiver}, RwLock},
 };
 
 pub trait Config: Send + Sync {
@@ -33,7 +32,7 @@ where
 {
     if let EventKind::Access(AccessKind::Close(AccessMode::Write)) = event.kind {
         debug!("file changed: {:?}", event);
-        let mut conf = config.write();
+        let mut conf = config.write().await;
         *conf = Config::update(path)?;
     }
     Ok(())
@@ -76,7 +75,7 @@ where
         })
     })?;
     watcher.watch(path.as_ref(), RecursiveMode::Recursive)?;
-    #[cfg(not(test))]
+    // #[cfg(not(test))]
     if let Err(err) = event_poll(_rx, &path, _config).await {
         warn!(
             "an error occured in the watcher: {:?}\n trying to reload",
