@@ -12,7 +12,7 @@ use notify::{
 use once_cell::sync::Lazy;
 use tokio::{
     runtime::Handle,
-    sync::{mpsc::{channel, Receiver}, RwLock},
+    sync::{mpsc::{channel, Receiver}, RwLock, watch},
 };
 
 pub trait Config: Send + Sync {
@@ -25,7 +25,7 @@ pub trait Config: Send + Sync {
 }
 
 ///react to a file change
-async fn event_reactor<P, C>(event: &Event, path: P, config: &Lazy<RwLock<C>>) -> Result<()>
+async fn event_reactor<P, C>(event: &Event, path: P, config: &Lazy<RwLock<C>>, notif: &Option<watch::Sender<()>>) -> Result<()>
 where
     P: AsRef<Path>,
     C: Config,
@@ -34,6 +34,10 @@ where
         debug!("file changed: {:?}", event);
         let mut conf = config.write().await;
         *conf = Config::update(path)?;
+        if let Some(n) = notif {
+            n.send(())?;
+        } 
+
     }
     Ok(())
 }
@@ -44,13 +48,14 @@ async fn event_poll<P, C>(
     mut rx: Receiver<notify::Result<notify::Event>>,
     path: &P,
     config: &Lazy<RwLock<C>>,
+    notif: &Option<watch::Sender<()>>
 ) -> Result<()>
 where
     P: AsRef<Path> + ?Sized,
     C: Config,
 {
     while let Some(event) = rx.recv().await {
-        event_reactor(&event?, &path, config).await?;
+        event_reactor(&event?, &path, config, notif).await?;
         #[cfg(test)]
         return Ok(());
     }
@@ -58,12 +63,16 @@ where
 }
 
 ///watch the config file for wrtie event and update the internal config data
-async fn config_watcher<P, C>(path: P, _config: &Lazy<RwLock<C>>) -> Result<()>
+async fn config_watcher<P, C>(
+    path: P,
+    config: &Lazy<RwLock<C>>,
+    notif: &Option<watch::Sender<()>>
+    ) -> Result<()>
 where
     P: AsRef<Path>,
     C: Config,
 {
-    let (tx, _rx) = channel(1);
+    let (tx, rx) = channel(1);
     let handle = Handle::current();
     // Automatically select the best implementation for your platform.
     // You can also access each implementation directly e.g. INotifyWatcher.
@@ -76,7 +85,7 @@ where
     })?;
     watcher.watch(path.as_ref(), RecursiveMode::Recursive)?;
     // #[cfg(not(test))]
-    if let Err(err) = event_poll(_rx, &path, _config).await {
+    if let Err(err) = event_poll(rx, &path, config, notif).await {
         warn!(
             "an error occured in the watcher: {:?}\n trying to reload",
             err
@@ -86,7 +95,12 @@ where
 }
 
 ///ititialise the config watchers
-pub async fn init_watcher<P, C>(path: P, config: &Lazy<RwLock<C>>) -> Result<()>
+///use the otional argument notif to reseiv notification of update
+pub async fn init_watcher<P, C>(
+    path: P,
+    config: &Lazy<RwLock<C>>,
+    notif: Option<watch::Sender<()>>
+    ) -> Result<()>
 where
     P: AsRef<Path>,
     C: Config,
@@ -96,7 +110,7 @@ where
     }
 
     loop {
-        config_watcher(&path, config).await?;
+        config_watcher(&path, config, &notif).await?;
     }
 }
 
@@ -156,7 +170,7 @@ mod test_config {
             paths: vec![Path::new(path).to_path_buf()],
             attrs: notify::event::EventAttributes::new(),
         };
-        event_reactor(&event, &path, &CONFIG).await.unwrap();
+        event_reactor(&event, &path, &CONFIG, &None).await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -169,7 +183,7 @@ mod test_config {
             attrs: notify::event::EventAttributes::new(),
         };
         tx.send(Ok(event)).await.unwrap();
-        event_poll(rx, &path, &CONFIG).await.unwrap();
+        event_poll(rx, &path, &CONFIG, &None).await.unwrap();
     }
 
     #[tokio::test]
@@ -177,13 +191,13 @@ mod test_config {
         let (tx, rx) = channel(1);
         let path = PATH;
         drop(tx);
-        let res = event_poll(rx, path, &CONFIG).await;
+        let res = event_poll(rx, path, &CONFIG, &None).await;
         assert!(res.is_err());
     }
 
     #[tokio::test]
     async fn test_config_watcher() {
-        let res = config_watcher(PATH, &CONFIG).await;
+        let res = config_watcher(PATH, &CONFIG, &None).await;
         assert!(res.is_ok());
     }
 }
