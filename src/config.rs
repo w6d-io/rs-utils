@@ -15,6 +15,34 @@ use tokio::{
     sync::{mpsc::{channel, Receiver}, RwLock, watch},
 };
 
+#[cfg(feature="kratos")]
+pub mod kratos{
+    use ory_kratos_client::apis::configuration::Configuration;
+    use serde::Deserialize;
+
+    ///structure containing kratos config. thi to be used with figment
+    #[derive(Deserialize)]
+    pub struct Kratos {
+        pub addr: String,
+
+        #[serde(skip)]
+        pub client: Option<Configuration>,
+    }
+
+    impl Kratos {
+        ///this fuction update the kratos client
+        pub fn update_kratos(mut self) -> Self {
+            let kratos = &self;
+            let mut client = Configuration::new();
+            client.base_path = kratos.addr.clone();
+            self.client = Some(client);
+            self
+        }
+    }
+}
+#[cfg(feature="kratos")]
+pub use kratos::Kratos;
+
 pub trait Config: Send + Sync {
     fn new(env_var: &str) -> Self
     where
