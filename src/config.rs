@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, Result};
-use log::{debug, warn};
+use log::{debug, warn, info};
 use notify::{
     event::{AccessKind, AccessMode, Event, EventKind},
     RecommendedWatcher, RecursiveMode, Watcher,
@@ -63,7 +63,7 @@ where
         let mut conf = config.write().await;
         *conf = Config::update(path)?;
         if let Some(n) = notif {
-           info!("receiver:", n.receiver_count())
+           info!("receiver:{}", n.receiver_count());
             n.send(())?;
         } 
 
