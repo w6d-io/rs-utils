@@ -63,6 +63,7 @@ where
         let mut conf = config.write().await;
         *conf = Config::update(path)?;
         if let Some(n) = notif {
+           info!("receiver:", n.receiver_count())
             n.send(())?;
         } 
 
