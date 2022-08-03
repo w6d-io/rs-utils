@@ -62,8 +62,9 @@ where
         debug!("file changed: {:?}", event);
         let mut conf = config.write().await;
         *conf = Config::update(path)?;
+        println!("sending change notiffication.");
         if let Some(n) = notif {
-           info!("receiver:{}", n.receiver_count());
+           println!("receiver:{}", n.receiver_count());
             n.send(())?;
         } 
 
@@ -85,7 +86,7 @@ where
 {
     while let Some(event) = rx.recv().await {
         event_reactor(&event?, &path, config, notif).await?;
-        #[cfg(test)]
+        #[cfg(est)]
         return Ok(());
     }
     Err(anyhow!("watch error: channel as been closed!"))
