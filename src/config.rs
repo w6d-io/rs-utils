@@ -81,9 +81,10 @@ async fn event_poll<P, C>(
     notif: &Option<watch::Sender<()>>
 ) -> Result<()>
 where
-    P: AsRef<Path> + ?Sized,
+    P: AsRef<Path> + ?Sized + std::fmt::Debug,
     C: Config,
 {
+    info!("watching {path:?}");
     while let Some(event) = rx.recv().await {
         event_reactor(&event?, &path, config, notif).await?;
         #[cfg(est)]
@@ -99,7 +100,7 @@ async fn config_watcher<P, C>(
     notif: &Option<watch::Sender<()>>
     ) -> Result<()>
 where
-    P: AsRef<Path>,
+    P: AsRef<Path> + std::fmt::Debug,
     C: Config,
 {
     let (tx, rx) = channel(1);
@@ -132,9 +133,10 @@ pub async fn init_watcher<P, C>(
     notif: Option<watch::Sender<()>>
     ) -> Result<()>
 where
-    P: AsRef<Path>,
+    P: AsRef<Path> + std::fmt::Debug,
     C: Config,
 {
+    info!("initialising_watcher");
     if !path.as_ref().exists() {
         bail!("no file found at {:?}", path.as_ref());
     }
