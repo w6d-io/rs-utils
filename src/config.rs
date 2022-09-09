@@ -113,7 +113,7 @@ where
                 .await
                 .expect("something went wrong with the watcher channel");
         })
-    })?;
+    }, notify::Config::default())?;
     watcher.watch(path.as_ref(), RecursiveMode::Recursive)?;
     // #[cfg(not(test))]
     if let Err(err) = event_poll(rx, &path, config, notif).await {
