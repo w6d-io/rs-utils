@@ -1,6 +1,6 @@
 use rocket::{
     response::{self, Responder},
-    Request
+    Request,
 };
 
 pub type Result<T = ()> = std::result::Result<T, Error>;

@@ -2,6 +2,27 @@ use anyhow::{bail, Result};
 use log::{debug, info};
 use ory_kratos_client::apis::{configuration::Configuration, v0alpha2_api::to_session};
 use rocket::http::Cookie;
+use serde::Deserialize;
+
+///structure containing kratos config. thi to be used with figment
+#[derive(Deserialize)]
+pub struct Kratos {
+    pub addr: String,
+
+    #[serde(skip)]
+    pub client: Option<Configuration>,
+}
+
+impl Kratos {
+    ///this fuction update the kratos client
+    pub fn update(mut self) -> Self {
+        let kratos = &self;
+        let mut client = Configuration::new();
+        client.base_path = kratos.addr.clone();
+        self.client = Some(client);
+        self
+    }
+}
 
 ///validate a katos session cookie.
 ///return an error if its invalid or the cookie is not present.

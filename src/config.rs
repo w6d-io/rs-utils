@@ -1,4 +1,5 @@
 use std::{
+    sync::Arc,
     marker::{Send, Sized, Sync},
     path::Path,
 };
@@ -9,39 +10,15 @@ use notify::{
     event::{AccessKind, AccessMode, Event, EventKind},
     RecommendedWatcher, RecursiveMode, Watcher,
 };
-use once_cell::sync::Lazy;
 use tokio::{
     runtime::Handle,
     sync::{mpsc::{channel, Receiver}, RwLock, watch},
 };
 
 #[cfg(feature="kratos")]
-pub mod kratos{
-    use ory_kratos_client::apis::configuration::Configuration;
-    use serde::Deserialize;
-
-    ///structure containing kratos config. thi to be used with figment
-    #[derive(Deserialize)]
-    pub struct Kratos {
-        pub addr: String,
-
-        #[serde(skip)]
-        pub client: Option<Configuration>,
-    }
-
-    impl Kratos {
-        ///this fuction update the kratos client
-        pub fn update_kratos(mut self) -> Self {
-            let kratos = &self;
-            let mut client = Configuration::new();
-            client.base_path = kratos.addr.clone();
-            self.client = Some(client);
-            self
-        }
-    }
-}
-#[cfg(feature="kratos")]
-pub use kratos::Kratos;
+pub use crate::kratos::Kratos;
+#[cfg(feature="minio")]
+pub use crate::minio::Minio;
 
 pub trait Config: Send + Sync {
     fn new(env_var: &str) -> Self
@@ -53,7 +30,7 @@ pub trait Config: Send + Sync {
 }
 
 ///react to a file change
-async fn event_reactor<P, C>(event: &Event, path: P, config: &Lazy<RwLock<C>>, notif: &Option<watch::Sender<()>>) -> Result<()>
+async fn event_reactor<P, C>(event: &Event, path: P, config: &Arc<RwLock<C>>, notif: &Option<watch::Sender<()>>) -> Result<()>
 where
     P: AsRef<Path>,
     C: Config,
@@ -77,7 +54,7 @@ where
 async fn event_poll<P, C>(
     mut rx: Receiver<notify::Result<notify::Event>>,
     path: &P,
-    config: &Lazy<RwLock<C>>,
+    config: &Arc<RwLock<C>>,
     notif: &Option<watch::Sender<()>>
 ) -> Result<()>
 where
@@ -87,16 +64,17 @@ where
     info!("watching {path:?}");
     while let Some(event) = rx.recv().await {
         event_reactor(&event?, &path, config, notif).await?;
-        #[cfg(est)]
+        #[cfg(test)]
         return Ok(());
     }
     Err(anyhow!("watch error: channel as been closed!"))
 }
 
+#[allow(unused_variables)]
 ///watch the config file for wrtie event and update the internal config data
 async fn config_watcher<P, C>(
     path: P,
-    config: &Lazy<RwLock<C>>,
+    config: &Arc<RwLock<C>>,
     notif: &Option<watch::Sender<()>>
     ) -> Result<()>
 where
@@ -115,7 +93,7 @@ where
         })
     }, notify::Config::default())?;
     watcher.watch(path.as_ref(), RecursiveMode::Recursive)?;
-    // #[cfg(not(test))]
+    #[cfg(not(test))]
     if let Err(err) = event_poll(rx, &path, config, notif).await {
         warn!(
             "an error occured in the watcher: {:?}\n trying to reload",
@@ -129,7 +107,7 @@ where
 ///use the otional argument notif to reseiv notification of update
 pub async fn init_watcher<P, C>(
     path: P,
-    config: &Lazy<RwLock<C>>,
+    config: Arc<RwLock<C>>,
     notif: Option<watch::Sender<()>>
     ) -> Result<()>
 where
@@ -142,7 +120,7 @@ where
     }
 
     loop {
-        config_watcher(&path, config, &notif).await?;
+        config_watcher(&path, &config, &notif).await?;
     }
 }
 
@@ -192,7 +170,6 @@ mod test_config {
         }
     }
 
-    pub static CONFIG: Lazy<RwLock<TestConfig>> = Lazy::new(|| RwLock::new(Config::new("CONFIG")));
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_event_reactor() {
@@ -202,11 +179,13 @@ mod test_config {
             paths: vec![Path::new(path).to_path_buf()],
             attrs: notify::event::EventAttributes::new(),
         };
-        event_reactor(&event, &path, &CONFIG, &None).await.unwrap();
+        let config = Arc::new(RwLock::new(TestConfig::new("CONFIG")));
+        event_reactor(&event, &path, &config.clone(), &None).await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_event_poll() {
+        let config = Arc::new(RwLock::new(TestConfig::new("CONFIG")));
         let (tx, rx) = channel(1);
         let path = PATH;
         let event = notify::event::Event {
@@ -215,21 +194,23 @@ mod test_config {
             attrs: notify::event::EventAttributes::new(),
         };
         tx.send(Ok(event)).await.unwrap();
-        event_poll(rx, &path, &CONFIG, &None).await.unwrap();
+        event_poll(rx, &path, &config.clone(), &None).await.unwrap();
     }
 
     #[tokio::test]
     async fn test_event_poll_closed_chanel() {
+        let config = Arc::new(RwLock::new(TestConfig::new("CONFIG")));
         let (tx, rx) = channel(1);
         let path = PATH;
         drop(tx);
-        let res = event_poll(rx, path, &CONFIG, &None).await;
+        let res = event_poll(rx, path, &config.clone(), &None).await;
         assert!(res.is_err());
     }
 
     #[tokio::test]
     async fn test_config_watcher() {
-        let res = config_watcher(PATH, &CONFIG, &None).await;
+        let config = Arc::new(RwLock::new(TestConfig::new("CONFIG")));
+        let res = config_watcher(PATH, &config.clone(), &None).await;
         assert!(res.is_ok());
     }
 }
