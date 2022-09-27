@@ -5,7 +5,7 @@ use rocket::http::Cookie;
 use serde::Deserialize;
 
 ///structure containing kratos config. thi to be used with figment
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct Kratos {
     pub addr: String,
 

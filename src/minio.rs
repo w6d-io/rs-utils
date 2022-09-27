@@ -1,15 +1,15 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use log::debug;
 // use reqwest::StatusCode;
 use crate::config;
 use s3::{
     creds::Credentials, error::S3Error, region::Region, request_trait::ResponseData,
-    serde_types::ListBucketResult, Bucket,
+    serde_types::Object, Bucket,
 };
 use serde::Deserialize;
 use time::OffsetDateTime;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct Minio {
     pub name: String,
     pub service: String,
@@ -44,7 +44,7 @@ impl Default for Minio {
     }
 }
 
-// use super::config;
+// use super::config
 
 /* fn http_code_handler(code: u16) -> Result<StatusCode> {
     let status = StatusCode::from_u16(code)?;
@@ -52,7 +52,7 @@ impl Default for Minio {
     info!("code {}: {}", code, reason);
     Ok(status)
 } */
-
+#[derive(Clone, Debug)]
 pub struct Client(Bucket);
 
 impl Client {
@@ -73,27 +73,29 @@ impl Client {
         Ok(Client(bucket.with_path_style()))
     }
 
-    pub async fn put_object<S>(&self, data: &[u8], path: S) -> Result<ResponseData, S3Error>
+    pub async fn put_object<S>(&self, data: &[u8], path: S) -> Result<ResponseData, anyhow::Error>
     where
         S: AsRef<str>,
     {
-        self.0.put_object(path, data).await
+        Ok(self.0.put_object(path, data).await?)
     }
 
-    pub async fn _get_object<S>(&self, path: S) -> Result<ResponseData, S3Error>
+    pub async fn get_object<S>(&self, path: S) -> Result<ResponseData, anyhow::Error>
     where
         S: AsRef<str>,
     {
-        self.0.get_object(path).await
+        Ok(self.0.get_object(path).await?)
     }
 
-    pub async fn _list_object(&self) -> Result<ListBucketResult> {
-        let raw_list = self.0.list("/".to_string(), None).await?;
+    pub async fn list_object(
+        &self,
+        path: String,
+        delimiter: Option<String>,
+    ) -> Result<Vec<Object>, anyhow::Error> {
+        let raw_list = self.0.list(path, delimiter).await?;
         debug!("raw bucket object: {:#?}", raw_list);
-        let list = raw_list
-            .get(0)
-            .ok_or_else(|| anyhow!("the bucket is empty"))?;
-        Ok(list.to_owned())
+        let list: Vec<Object> = raw_list.iter().flat_map(|v| v.contents.to_owned()).collect();
+        Ok(list)
     }
 }
 /* #[cfg(test)]

@@ -1,24 +1,29 @@
 use std::{
-    sync::Arc,
     marker::{Send, Sized, Sync},
     path::Path,
+    sync::Arc,
 };
 
 use anyhow::{anyhow, bail, Result};
-use log::{debug, warn, info};
+use log::{debug, info, warn};
 use notify::{
     event::{AccessKind, AccessMode, Event, EventKind},
     RecommendedWatcher, RecursiveMode, Watcher,
 };
 use tokio::{
     runtime::Handle,
-    sync::{mpsc::{channel, Receiver}, RwLock, watch},
+    sync::{
+        mpsc::{channel, Receiver},
+        watch, RwLock,
+    },
 };
 
-#[cfg(feature="kratos")]
+#[cfg(feature = "kratos")]
 pub use crate::kratos::Kratos;
-#[cfg(feature="minio")]
+#[cfg(feature = "minio")]
 pub use crate::minio::Minio;
+#[cfg(feature = "redis")]
+pub use crate::redis::Redis;
 
 pub trait Config: Send + Sync {
     fn new(env_var: &str) -> Self
@@ -30,7 +35,12 @@ pub trait Config: Send + Sync {
 }
 
 ///react to a file change
-async fn event_reactor<P, C>(event: &Event, path: P, config: &Arc<RwLock<C>>, notif: &Option<watch::Sender<()>>) -> Result<()>
+async fn event_reactor<P, C>(
+    event: &Event,
+    path: P,
+    config: &Arc<RwLock<C>>,
+    notif: &Option<watch::Sender<()>>,
+) -> Result<()>
 where
     P: AsRef<Path>,
     C: Config,
@@ -41,10 +51,9 @@ where
         *conf = Config::update(path)?;
         println!("sending change notiffication.");
         if let Some(n) = notif {
-           println!("receiver:{}", n.receiver_count());
+            println!("receiver:{}", n.receiver_count());
             n.send(())?;
-        } 
-
+        }
     }
     Ok(())
 }
@@ -55,7 +64,7 @@ async fn event_poll<P, C>(
     mut rx: Receiver<notify::Result<notify::Event>>,
     path: &P,
     config: &Arc<RwLock<C>>,
-    notif: &Option<watch::Sender<()>>
+    notif: &Option<watch::Sender<()>>,
 ) -> Result<()>
 where
     P: AsRef<Path> + ?Sized + std::fmt::Debug,
@@ -75,8 +84,8 @@ where
 async fn config_watcher<P, C>(
     path: P,
     config: &Arc<RwLock<C>>,
-    notif: &Option<watch::Sender<()>>
-    ) -> Result<()>
+    notif: &Option<watch::Sender<()>>,
+) -> Result<()>
 where
     P: AsRef<Path> + std::fmt::Debug,
     C: Config,
@@ -85,13 +94,16 @@ where
     let handle = Handle::current();
     // Automatically select the best implementation for your platform.
     // You can also access each implementation directly e.g. INotifyWatcher.
-    let mut watcher = RecommendedWatcher::new(move |res| {
-        handle.block_on(async {
-            tx.send(res)
-                .await
-                .expect("something went wrong with the watcher channel");
-        })
-    }, notify::Config::default())?;
+    let mut watcher = RecommendedWatcher::new(
+        move |res| {
+            handle.block_on(async {
+                tx.send(res)
+                    .await
+                    .expect("something went wrong with the watcher channel");
+            })
+        },
+        notify::Config::default(),
+    )?;
     watcher.watch(path.as_ref(), RecursiveMode::Recursive)?;
     #[cfg(not(test))]
     if let Err(err) = event_poll(rx, &path, config, notif).await {
@@ -108,8 +120,8 @@ where
 pub async fn init_watcher<P, C>(
     path: P,
     config: Arc<RwLock<C>>,
-    notif: Option<watch::Sender<()>>
-    ) -> Result<()>
+    notif: Option<watch::Sender<()>>,
+) -> Result<()>
 where
     P: AsRef<Path> + std::fmt::Debug,
     C: Config,
@@ -170,7 +182,6 @@ mod test_config {
         }
     }
 
-
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_event_reactor() {
         let path = PATH;
@@ -180,7 +191,9 @@ mod test_config {
             attrs: notify::event::EventAttributes::new(),
         };
         let config = Arc::new(RwLock::new(TestConfig::new("CONFIG")));
-        event_reactor(&event, &path, &config.clone(), &None).await.unwrap();
+        event_reactor(&event, &path, &config.clone(), &None)
+            .await
+            .unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

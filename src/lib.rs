@@ -5,3 +5,5 @@ pub mod config;
 pub mod kratos;
 #[cfg(feature = "minio")]
 pub mod minio;
+#[cfg(feature = "redis")]
+pub mod redis;
