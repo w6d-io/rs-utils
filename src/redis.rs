@@ -1,3 +1,4 @@
+use anyhow::bail;
 use anyhow::Result;
 use redis::Cmd;
 use serde::Deserialize;
@@ -5,6 +6,8 @@ use serde::Deserialize;
 #[derive(Deserialize, Clone, Debug)]
 pub struct Redis {
     pub addr: String,
+    pub password: Option<String>,
+    pub user: Option<String>,
     #[serde(skip_deserializing)]
     pub client: Option<Client>,
 }
@@ -22,6 +25,22 @@ pub struct Client(redis::Client);
 
 impl Client {
     pub fn new(config: &Redis) -> Result<Self> {
+        let mut url = String::from("Redis://");
+        match config.password {
+            Some(ref password) => {
+                if let Some(ref user) = config.user {
+                    url = url + user as &str + ":";
+                }
+                url = url + password as &str + "@";
+            }
+            None => {
+                if config.user.is_some() {
+                    bail!("Error: provided redis user without password");
+                }
+            }
+        }
+        url += &config.addr as &str;
+
         let client = redis::Client::open(config.addr.clone())?;
         Ok(Client(client))
     }

@@ -94,7 +94,10 @@ impl Client {
     ) -> Result<Vec<Object>, anyhow::Error> {
         let raw_list = self.0.list(path, delimiter).await?;
         debug!("raw bucket object: {:#?}", raw_list);
-        let list: Vec<Object> = raw_list.iter().flat_map(|v| v.contents.to_owned()).collect();
+        let list: Vec<Object> = raw_list
+            .iter()
+            .flat_map(|v| v.contents.to_owned())
+            .collect();
         Ok(list)
     }
 }
