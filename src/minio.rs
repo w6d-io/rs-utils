@@ -32,7 +32,7 @@ impl Minio {
         Ok(self)
     }
 
-    fn get_secrets(mut self) -> Result<Self> {
+    pub fn set_secrets(mut self) -> Result<Self> {
         let prefix = match self.prefix {
             Some(ref pref) => pref,
             None => {
