@@ -1,5 +1,7 @@
+use std::env;
+
 use anyhow::Result;
-use log::debug;
+use log::{debug, warn};
 // use reqwest::StatusCode;
 use crate::config;
 use s3::{
@@ -20,12 +22,39 @@ pub struct Minio {
     pub expiration: Option<OffsetDateTime>,
     #[serde(skip_deserializing)]
     pub client: Option<Client>,
+    #[serde(skip_deserializing)]
+    pub prefix: Option<String>,
 }
 
 impl Minio {
     pub fn update(mut self) -> Result<Self> {
         self.client = Some(Client::new(&self)?);
         Ok(self)
+    }
+
+    fn get_secrets(mut self) -> Result<Self> {
+        let prefix = match self.prefix {
+            Some(ref pref) => pref,
+            None => {
+                warn!("No prefix provided!");
+                return Ok(self);
+            }
+        };
+        self.access_key = env::var(prefix.to_owned() + "_AWS_ACCESS_KEY").ok().or_else(|| {
+            if self.access_key.is_some() {
+                self.access_key
+            } else {
+                None
+            }
+        });
+        self.secret_key = env::var(prefix.to_owned() + "_AWS_SECRET_KEY").ok().or_else(|| {
+            if self.secret_key.is_some() {
+                self.secret_key
+            } else {
+                None
+            }
+        });
+        self.update()
     }
 }
 
@@ -40,6 +69,7 @@ impl Default for Minio {
             session_token: None,
             expiration: None,
             client: None,
+            prefix: None,
         }
     }
 }
