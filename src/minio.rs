@@ -11,7 +11,7 @@ use s3::{
 use serde::Deserialize;
 use time::OffsetDateTime;
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, Default)]
 pub struct Minio {
     pub name: String,
     pub service: String,
@@ -27,52 +27,41 @@ pub struct Minio {
 }
 
 impl Minio {
-    pub fn update(mut self) -> Result<Self> {
-        self.client = Some(Client::new(&self)?);
+    ///update the client with the structure data
+    pub fn update(&mut self) -> Result<&mut Self, S3Error> {
+        self.client = Some(Client::new(self)?);
         Ok(self)
     }
 
-    pub fn set_secrets(mut self) -> Result<Self> {
+    ///fetch the secret from the environment
+    pub fn set_secrets(&mut self) -> &mut Self {
         let prefix = match self.prefix {
-            Some(ref pref) => pref,
+            Some(ref pref) => pref.to_owned(),
             None => {
                 warn!("No prefix provided!");
-                return Ok(self);
+                return self;
             }
         };
-        self.access_key = env::var(prefix.to_owned() + "_AWS_ACCESS_KEY").ok().or_else(|| {
-            if self.access_key.is_some() {
-                self.access_key
-            } else {
-                None
-            }
-        });
-        self.secret_key = env::var(prefix.to_owned() + "_AWS_SECRET_KEY").ok().or_else(|| {
+        self.access_key = env::var(prefix.clone() + "_AWS_ACCESS_KEY")
+            .ok()
+            .or_else(|| {
+                if self.access_key.is_some() {
+                    self.access_key.to_owned()
+                } else {
+                    None
+                }
+            });
+        self.secret_key = env::var(prefix + "_AWS_SECRET_KEY").ok().or_else(|| {
             if self.secret_key.is_some() {
-                self.secret_key
+                self.secret_key.to_owned()
             } else {
                 None
             }
         });
-        self.update()
+        self
     }
 }
 
-impl Default for Minio {
-    fn default() -> Self {
-        Minio {
-            name: "".to_owned(),
-            service: "".to_owned(),
-            access_key: None,
-            secret_key: None,
-            security_token: None,
-            session_token: None,
-            expiration: None,
-            client: None,
-            prefix: None,
-        }
-    }
-}
 
 // use super::config
 
@@ -103,18 +92,18 @@ impl Client {
         Ok(Client(bucket.with_path_style()))
     }
 
-    pub async fn put_object<S>(&self, data: &[u8], path: S) -> Result<ResponseData, anyhow::Error>
+    pub async fn put_object<S>(&self, data: &[u8], path: S) -> Result<ResponseData, S3Error>
     where
         S: AsRef<str>,
     {
-        Ok(self.0.put_object(path, data).await?)
+        self.0.put_object(path, data).await
     }
 
-    pub async fn get_object<S>(&self, path: S) -> Result<ResponseData, anyhow::Error>
+    pub async fn get_object<S>(&self, path: S) -> Result<ResponseData, S3Error>
     where
         S: AsRef<str>,
     {
-        Ok(self.0.get_object(path).await?)
+        self.0.get_object(path).await
     }
 
     pub async fn list_object(

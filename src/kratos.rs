@@ -5,7 +5,7 @@ use rocket::http::Cookie;
 use serde::Deserialize;
 
 ///structure containing kratos config. thi to be used with figment
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, Default)]
 pub struct Kratos {
     pub addr: String,
 
@@ -15,29 +15,28 @@ pub struct Kratos {
 
 impl Kratos {
     ///this fuction update the kratos client
-    pub fn update(mut self) -> Self {
+    pub fn update(&mut self) -> &mut Self {
         let kratos = &self;
         let mut client = Configuration::new();
         client.base_path = kratos.addr.clone();
         self.client = Some(client);
         self
     }
-}
-
-///validate a katos session cookie.
-///return an error if its invalid or the cookie is not present.
-pub async fn validate_session(kratos: &Option<Configuration>, session: &Cookie<'_>) -> Result<()> {
-    let kratos_client = match kratos {
-        Some(client) => client,
-        None => {
-            bail!("kratos is not initialized!");
-        }
-    };
-    info!("validating session cookie");
-    debug!("session cookie: {session}");
-    to_session(kratos_client, None, Some(&session.to_string())).await?;
-    info!("session cookie successfully validated");
-    Ok(())
+    ///validate a katos session cookie.
+    ///return an error if its invalid or the cookie is not present.
+    pub async fn validate_session(&self, session: &Cookie<'_>) -> Result<()> {
+        let kratos_client = match self.client {
+            Some(ref client) => client,
+            None => {
+                bail!("kratos is not initialized!");
+            }
+        };
+        info!("validating session cookie");
+        debug!("session cookie: {session}");
+        to_session(kratos_client, None, Some(&session.to_string())).await?;
+        info!("session cookie successfully validated");
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -57,10 +56,15 @@ mod kratos_test {
                     .body(r#"{"id": "1","identity": {"id":"1","schema_id":"1","schema_url":"test.com" }}"#);
             })
             .await;
-        let mut kratos = Configuration::new();
-        kratos.base_path = server.base_url();
+        let mut kratos = Kratos {
+            client: Some(Configuration::new()),
+            ..Default::default()
+        };
+        let mut client = kratos.client.unwrap();
+        client.base_path = server.base_url();
+        kratos.client = Some(client);
         let cookies = Cookie::new("ory_kratos_session", "test");
-        let res = validate_session(&Some(kratos), &cookies).await;
+        let res = kratos.validate_session(&cookies).await;
         mock.assert_async().await;
         assert!(res.is_ok());
     }
@@ -74,10 +78,15 @@ mod kratos_test {
                 then.status(500);
             })
             .await;
-        let mut kratos = Configuration::new();
-        kratos.base_path = server.base_url();
+        let mut kratos = Kratos {
+            client: Some(Configuration::new()),
+            ..Default::default()
+        };
+        let mut client = kratos.client.unwrap();
+        client.base_path = server.base_url();
+        kratos.client = Some(client);
         let cookies = Cookie::new("ory_kratos_session", "test");
-        let res = validate_session(&Some(kratos), &cookies).await;
+        let res = kratos.validate_session(&cookies).await;
         mock.assert_async().await;
         assert!(res.is_err());
     }

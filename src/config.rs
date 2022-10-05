@@ -10,6 +10,7 @@ use notify::{
     event::{AccessKind, AccessMode, Event, EventKind},
     RecommendedWatcher, RecursiveMode, Watcher,
 };
+use serde::Deserialize;
 use tokio::{
     runtime::Handle,
     sync::{
@@ -25,30 +26,45 @@ pub use crate::minio::Minio;
 #[cfg(feature = "redis")]
 pub use crate::redis::Redis;
 
-pub trait Config: Send + Sync {
+pub trait Config: Send + Sync + Default + Clone {
     fn new(env_var: &str) -> Self
     where
-        Self: Sized;
-    fn update<P: AsRef<Path>>(path: P) -> Result<Self>
+        Self: Sized + for<'a> Deserialize<'a>,
+    {
+        let path = match std::env::var(env_var) {
+            Ok(path) => path,
+            Err(e) => {
+                warn!("error while reading environment variable: {e}, switching to fallback.");
+                "tests/config.toml".to_owned()
+            }
+        };
+        let mut config = Self::default();
+        config.set_path(path.clone());
+        if let Err(e) = config.update() {
+            panic!("failed to update config {:?}: {:?}", path, e);
+        };
+        config
+    }
+
+    fn set_path<T: AsRef<Path>>(&mut self, path: T) -> &mut Self;
+    fn update(&mut self) -> Result<()>
     where
         Self: Sized;
 }
 
 ///react to a file change
-async fn event_reactor<P, C>(
+async fn event_reactor<C>(
     event: &Event,
-    path: P,
     config: &Arc<RwLock<C>>,
     notif: &Option<watch::Sender<()>>,
 ) -> Result<()>
 where
-    P: AsRef<Path>,
     C: Config,
 {
     if let EventKind::Access(AccessKind::Close(AccessMode::Write)) = event.kind {
         debug!("file changed: {:?}", event);
         let mut conf = config.write().await;
-        *conf = Config::update(path)?;
+        conf.update()?;
         println!("sending change notiffication.");
         if let Some(n) = notif {
             println!("receiver:{}", n.receiver_count());
@@ -60,19 +76,16 @@ where
 
 #[allow(clippy::never_loop)]
 ///poll for file change event
-async fn event_poll<P, C>(
+async fn event_poll<C>(
     mut rx: Receiver<notify::Result<notify::Event>>,
-    path: &P,
     config: &Arc<RwLock<C>>,
     notif: &Option<watch::Sender<()>>,
 ) -> Result<()>
 where
-    P: AsRef<Path> + ?Sized + std::fmt::Debug,
     C: Config,
 {
-    info!("watching {path:?}");
     while let Some(event) = rx.recv().await {
-        event_reactor(&event?, &path, config, notif).await?;
+        event_reactor(&event?, config, notif).await?;
         #[cfg(test)]
         return Ok(());
     }
@@ -106,7 +119,7 @@ where
     )?;
     watcher.watch(path.as_ref(), RecursiveMode::Recursive)?;
     #[cfg(not(test))]
-    if let Err(err) = event_poll(rx, &path, config, notif).await {
+    if let Err(err) = event_poll(rx, config, notif).await {
         warn!(
             "an error occured in the watcher: {:?}\n trying to reload",
             err
@@ -138,47 +151,44 @@ where
 
 #[cfg(test)]
 mod test_config {
-    use super::*;
+    use std::{path::PathBuf, collections::HashMap};
+
     use figment::{
         providers::{Format, Yaml},
         Figment,
     };
-    use serde::Deserialize;
-    use std::collections::HashMap;
 
-    #[derive(Deserialize)]
+    use super::*;
+
+    #[derive(Deserialize, Default, Clone)]
     pub struct TestConfig {
         pub salt: String,
         pub salt_length: usize,
         pub http: HashMap<String, String>,
         pub grpc: HashMap<String, String>,
+        path: Option<PathBuf>,
     }
 
     const PATH: &str = "test/config.yaml";
 
     impl Config for TestConfig {
-        ///initialise the config struct
-        fn new(var: &str) -> Self {
-            let path = match std::env::var(var) {
-                Ok(path) => path,
-                Err(e) => {
-                    warn!("error while reading environment variable: {e}, switching to fallback.");
-                    PATH.to_owned()
-                }
-            };
-            match Self::update(&path) {
-                Ok(conf) => conf,
-                Err(e) => panic!("failed to update config {:?}: {:?}", path, e),
-            }
+        fn set_path<T: AsRef<Path>>(&mut self, path: T) -> &mut Self {
+            self.path = Some(path.as_ref().to_owned());
+            self
         }
-
         ///update the config in the static variable
-        fn update<P: AsRef<Path>>(path: P) -> Result<Self> {
-            if !path.as_ref().exists() {
+        fn update(&mut self) -> Result<()> {
+            let path = match self.path {
+                Some(ref path) => path as &Path,
+                None => bail!("config file path not set"),
+            };
+            if !path.exists() {
                 bail!("config was not found");
             }
-            let config: TestConfig = Figment::new().merge(Yaml::file(path)).extract()?;
-            Ok(config)
+            let mut figment: TestConfig = Figment::new().merge(Yaml::file(path)).extract()?;
+            figment.path = Some(path.to_path_buf());
+            *self = figment;
+            Ok(())
         }
     }
 
@@ -190,10 +200,9 @@ mod test_config {
             paths: vec![Path::new(path).to_path_buf()],
             attrs: notify::event::EventAttributes::new(),
         };
+        std::env::set_var("CONFIG", path);
         let config = Arc::new(RwLock::new(TestConfig::new("CONFIG")));
-        event_reactor(&event, &path, &config.clone(), &None)
-            .await
-            .unwrap();
+        event_reactor(&event, &config.clone(), &None).await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -201,13 +210,14 @@ mod test_config {
         let config = Arc::new(RwLock::new(TestConfig::new("CONFIG")));
         let (tx, rx) = channel(1);
         let path = PATH;
+        std::env::set_var("CONFIG", path);
         let event = notify::event::Event {
             kind: EventKind::Access(AccessKind::Close(AccessMode::Write)),
             paths: vec![Path::new(path).to_path_buf()],
             attrs: notify::event::EventAttributes::new(),
         };
         tx.send(Ok(event)).await.unwrap();
-        event_poll(rx, &path, &config.clone(), &None).await.unwrap();
+        event_poll(rx, &config.clone(), &None).await.unwrap();
     }
 
     #[tokio::test]
@@ -215,13 +225,15 @@ mod test_config {
         let config = Arc::new(RwLock::new(TestConfig::new("CONFIG")));
         let (tx, rx) = channel(1);
         let path = PATH;
+        std::env::set_var("CONFIG", path);
         drop(tx);
-        let res = event_poll(rx, path, &config.clone(), &None).await;
+        let res = event_poll(rx, &config.clone(), &None).await;
         assert!(res.is_err());
     }
 
     #[tokio::test]
     async fn test_config_watcher() {
+        std::env::set_var("CONFIG", PATH);
         let config = Arc::new(RwLock::new(TestConfig::new("CONFIG")));
         let res = config_watcher(PATH, &config.clone(), &None).await;
         assert!(res.is_ok());

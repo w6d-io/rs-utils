@@ -3,7 +3,7 @@ use anyhow::Result;
 use redis::Cmd;
 use serde::Deserialize;
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, Default)]
 pub struct Redis {
     pub addr: String,
     pub password: Option<String>,
@@ -13,8 +13,8 @@ pub struct Redis {
 }
 
 impl Redis {
-    pub fn update(mut self) -> Result<Self> {
-        let client = Client::new(&self)?;
+    pub fn update(&mut self) -> Result<&mut Self> {
+        let client = Client::new(self)?;
         self.client = Some(client);
         Ok(self)
     }
