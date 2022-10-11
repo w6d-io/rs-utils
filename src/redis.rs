@@ -135,6 +135,15 @@ impl Client {
         let res: bool = Cmd::exists(key).query_async(&mut connection).await?;
         Ok(res)
     }
+
+    pub async fn ping(&self) -> Result<()> {
+        let mut connection = match self.connection{
+            Some(ref connection) => connection.clone(),
+            None => return Err(RedisError::Connection)
+        };
+        redis::cmd("PING").query_async(&mut connection).await?;
+        Ok(())
+    }
 }
 
 impl Debug for Client{
