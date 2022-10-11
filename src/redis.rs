@@ -67,7 +67,7 @@ impl Client {
 
     ///create a new client form the redis config
     pub fn new(config: &Redis) -> Result<Self> {
-        let mut url = String::from("Redis://");
+        let mut url = String::from("redis://");
         match config.password {
             Some(ref password) => {
                 if let Some(ref user) = config.user {
