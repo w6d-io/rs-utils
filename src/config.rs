@@ -151,7 +151,7 @@ where
 
 #[cfg(test)]
 mod test_config {
-    use std::{path::PathBuf, collections::HashMap};
+    use std::{collections::HashMap, path::PathBuf};
 
     use figment::{
         providers::{Format, Yaml},
@@ -182,8 +182,11 @@ mod test_config {
                 Some(ref path) => path as &Path,
                 None => bail!("config file path not set"),
             };
-            if !path.exists() {
-                bail!("config was not found");
+            match path.try_exists() {
+                Ok(exists) => {if !exists {
+                    bail!("config was not found");
+                }},
+                Err(e) => bail!(e)
             }
             let mut figment: TestConfig = Figment::new().merge(Yaml::file(path)).extract()?;
             figment.path = Some(path.to_path_buf());

@@ -62,7 +62,6 @@ impl Minio {
     }
 }
 
-
 // use super::config
 
 /* fn http_code_handler(code: u16) -> Result<StatusCode> {
