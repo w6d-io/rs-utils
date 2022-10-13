@@ -18,17 +18,17 @@ pub enum RedisError {
 type Result<T> = std::result::Result<T, RedisError>;
 
 #[derive(Debug, Deserialize, Clone, Default)]
-pub struct Redis<'a> {
+pub struct Redis {
     pub addr: String,
     pub password: Option<String>,
     pub user: Option<String>,
     #[serde(skip_deserializing)]
     pub client: Option<Client>,
     #[serde(skip_deserializing)]
-    pub prefix: Option<&'a str>,
+    pub prefix: Option<String>,
 }
 
-impl Redis<'_> {
+impl Redis {
     pub fn update(&mut self) -> Result<&mut Self> {
         let client = Client::new(self)?;
         self.client = Some(client);
@@ -38,7 +38,7 @@ impl Redis<'_> {
     ///fetch the secret from the environment
     pub fn set_secrets(&mut self) -> &mut Self {
         let prefix = match self.prefix {
-            Some(pref) => pref.to_string(),
+            Some(ref pref) => pref.to_owned(),
             None => {
                 warn!("No prefix provided!");
                 return self;
