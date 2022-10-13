@@ -12,7 +12,7 @@ use serde::Deserialize;
 use time::OffsetDateTime;
 
 #[derive(Deserialize, Clone, Debug, Default)]
-pub struct Minio {
+pub struct Minio<'a> {
     pub name: String,
     pub service: String,
     pub access_key: Option<String>,
@@ -23,10 +23,10 @@ pub struct Minio {
     #[serde(skip_deserializing)]
     pub client: Option<Client>,
     #[serde(skip_deserializing)]
-    pub prefix: Option<String>,
+    pub prefix: Option<&'a str>,
 }
 
-impl Minio {
+impl Minio<'_> {
     ///update the client with the structure data
     pub fn update(&mut self) -> Result<&mut Self, S3Error> {
         self.client = Some(Client::new(self)?);
@@ -36,7 +36,7 @@ impl Minio {
     ///fetch the secret from the environment
     pub fn set_secrets(&mut self) -> &mut Self {
         let prefix = match self.prefix {
-            Some(ref pref) => pref.to_owned(),
+            Some(pref) => pref.to_string(),
             None => {
                 warn!("No prefix provided!");
                 return self;
