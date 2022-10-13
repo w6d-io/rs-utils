@@ -69,7 +69,7 @@ fn construc_uri(addr: &str, user: &Option<String>, password: &Option<String>) ->
             if let Some(ref user) = user {
                 url = url + user as &str + ":";
             }
-            url = url + password as &str + "@";
+            url = url + ":" + password as &str + "@";
         }
         None => {
             if user.is_some() {
@@ -85,7 +85,6 @@ impl Client {
     ///create a new client form the redis config
     pub fn new(config: &Redis) -> Result<Self> {
         let url = construc_uri(&config.addr, &config.user, &config.password)?;
-        debug!("url:  {url:?}");
         let info = redis::Client::open(url)?;
         let client = Client {
             client: info,
