@@ -1,6 +1,6 @@
 use std::{env, fmt::Debug};
 
-use log::warn;
+use log::{warn, debug};
 use redis::{aio::Connection, aio::ConnectionManager, Cmd};
 use serde::Deserialize;
 use thiserror::Error;
@@ -61,6 +61,7 @@ pub struct Client {
     pub connection: Option<ConnectionManager>,
 }
 
+///constuct the uri form the addr, user and password
 fn construc_uri(addr: &str, user: &Option<String>, password: &Option<String>) -> Result<String> {
     let mut url = String::from("redis://");
     match password {
@@ -84,6 +85,7 @@ impl Client {
     ///create a new client form the redis config
     pub fn new(config: &Redis) -> Result<Self> {
         let url = construc_uri(&config.addr, &config.user, &config.password)?;
+        debug!("url:  {url:?}");
         let info = redis::Client::open(url)?;
         let client = Client {
             client: info,
