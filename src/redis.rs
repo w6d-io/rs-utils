@@ -67,7 +67,7 @@ fn construc_uri(addr: &str, user: &Option<String>, password: &Option<String>) ->
     match password {
         Some(ref password) => {
             if let Some(ref user) = user {
-                url = url + user as &str + ":";
+                url += user as &str;
             }
             url = url + ":" + password as &str + "@";
         }
@@ -175,7 +175,7 @@ mod test_redis {
         let addr = "test.test:8080";
         let user = None;
         let password = Some("tata64".to_string());
-        let expected = "redis://tata64@test.test:8080";
+        let expected = "redis://:tata64@test.test:8080";
         let res = construc_uri(addr, &user, &password).unwrap();
         assert_eq!(res, expected);
     }

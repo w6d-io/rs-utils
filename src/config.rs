@@ -26,7 +26,7 @@ pub use crate::minio::Minio;
 #[cfg(feature = "redis")]
 pub use crate::redis::Redis;
 
-pub trait Config: Send + Sync + Default + Clone {
+pub trait Config: Send + Sync + Default{
     fn new(env_var: &str) -> Self
     where
         Self: Sized + for<'a> Deserialize<'a>,
