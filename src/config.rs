@@ -7,7 +7,7 @@ use std::{
 use anyhow::{anyhow, bail, Result};
 use log::{debug, info, warn};
 use notify::{
-    event::{AccessKind, AccessMode, Event, EventKind, ModifyKind, DataChange},
+    event::{AccessKind, AccessMode, Event, EventKind},
     RecommendedWatcher, RecursiveMode, Watcher,
 };
 use serde::Deserialize;
@@ -61,7 +61,7 @@ async fn event_reactor<C>(
 where
     C: Config,
 {
-    if let EventKind::Modify(ModifyKind::Data(DataChange::Content)) = event.kind {
+    if let EventKind::Access(AccessKind::Close(AccessMode::Write)) = event.kind {
         debug!("file changed: {:?}", event);
         let mut conf = config.write().await;
         conf.update()?;
@@ -199,7 +199,7 @@ mod test_config {
     async fn test_event_reactor() {
         let path = PATH;
         let event = notify::event::Event {
-            kind: EventKind::Modify(ModifyKind::Data(DataChange::Content)),
+            kind: EventKind::Access(AccessKind::Close(AccessMode::Write)),
             paths: vec![Path::new(path).to_path_buf()],
             attrs: notify::event::EventAttributes::new(),
         };
