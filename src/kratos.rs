@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 use log::{debug, info};
-use ory_kratos_client::apis::{configuration::Configuration, v0alpha2_api::to_session};
+use ory_kratos_client::{apis::{configuration::Configuration, v0alpha2_api::to_session}, models::Identity};
 use rocket::http::Cookie;
 use serde::Deserialize;
 
@@ -23,8 +23,9 @@ impl Kratos {
         self
     }
     ///validate a katos session cookie.
+    ///return the user identity.
     ///return an error if its invalid or the cookie is not present.
-    pub async fn validate_session(&self, session: &Cookie<'_>) -> Result<()> {
+    pub async fn validate_session(&self, cookie: &Cookie<'_>) -> Result<Identity> {
         let kratos_client = match self.client {
             Some(ref client) => client,
             None => {
@@ -32,10 +33,10 @@ impl Kratos {
             }
         };
         info!("validating session cookie");
-        debug!("session cookie: {session}");
-        to_session(kratos_client, None, Some(&session.to_string())).await?;
+        debug!("session cookie: {cookie}");
+        let session = to_session(kratos_client, None, Some(&cookie.to_string())).await?;
         info!("session cookie successfully validated");
-        Ok(())
+        Ok(*session.identity)
     }
 }
 

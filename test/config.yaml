@@ -1,7 +1,2 @@
 salt: "test"
 salt_length: 200
-http:
-  kratos: 'http://totos.totos:4434'
-  project: 'http://eject:8080/health/ready'
-grpc:
-  project: 'http://eject:8080/'
