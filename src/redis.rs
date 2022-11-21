@@ -1,6 +1,6 @@
 use std::{env, fmt::Debug};
 
-use log::{warn, debug};
+use log::warn;
 use redis::{aio::Connection, aio::ConnectionManager, Cmd};
 use serde::Deserialize;
 use thiserror::Error;

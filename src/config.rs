@@ -151,7 +151,7 @@ where
 
 #[cfg(test)]
 mod test_config {
-    use std::{collections::HashMap, path::PathBuf};
+    use std::path::PathBuf;
 
     use figment::{
         providers::{Format, Yaml},
@@ -164,8 +164,6 @@ mod test_config {
     pub struct TestConfig {
         pub salt: String,
         pub salt_length: usize,
-        pub http: HashMap<String, String>,
-        pub grpc: HashMap<String, String>,
         path: Option<PathBuf>,
     }
 
@@ -176,6 +174,7 @@ mod test_config {
             self.path = Some(path.as_ref().to_owned());
             self
         }
+
         ///update the config in the static variable
         fn update(&mut self) -> Result<()> {
             let path = match self.path {
@@ -193,27 +192,46 @@ mod test_config {
             *self = figment;
             Ok(())
         }
+
+        fn new(env_var: &str) -> Self
+    where
+        Self: Sized + for<'a> Deserialize<'a>,
+    {
+        let path = match std::env::var(env_var) {
+            Ok(path) => path,
+            Err(e) => {
+                warn!("error while reading environment variable: {e}, switching to fallback.");
+                "tests/config.toml".to_owned()
+            }
+        };
+        let mut config = Self::default();
+        config.set_path(path.clone());
+        if let Err(e) = config.update() {
+            panic!("failed to update config {:?}: {:?}", path, e);
+        };
+        config
+    }
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_event_reactor() {
+        std::env::set_var("CONFIG", PATH);
         let path = PATH;
         let event = notify::event::Event {
             kind: EventKind::Access(AccessKind::Close(AccessMode::Write)),
             paths: vec![Path::new(path).to_path_buf()],
             attrs: notify::event::EventAttributes::new(),
         };
-        std::env::set_var("CONFIG", path);
         let config = Arc::new(RwLock::new(TestConfig::new("CONFIG")));
         event_reactor(&event, &config.clone(), &None).await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_event_poll() {
+        std::env::set_var("CONFIG", PATH);
         let config = Arc::new(RwLock::new(TestConfig::new("CONFIG")));
         let (tx, rx) = channel(1);
         let path = PATH;
-        std::env::set_var("CONFIG", path);
         let event = notify::event::Event {
             kind: EventKind::Access(AccessKind::Close(AccessMode::Write)),
             paths: vec![Path::new(path).to_path_buf()],
@@ -225,10 +243,9 @@ mod test_config {
 
     #[tokio::test]
     async fn test_event_poll_closed_chanel() {
+        std::env::set_var("CONFIG", PATH);
         let config = Arc::new(RwLock::new(TestConfig::new("CONFIG")));
         let (tx, rx) = channel(1);
-        let path = PATH;
-        std::env::set_var("CONFIG", path);
         drop(tx);
         let res = event_poll(rx, &config.clone(), &None).await;
         assert!(res.is_err());
