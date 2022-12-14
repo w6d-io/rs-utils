@@ -2,6 +2,7 @@ use std::{
     marker::{Send, Sized, Sync},
     path::Path,
     sync::Arc,
+    fmt::Debug
 };
 
 use anyhow::{anyhow, bail, Result};
@@ -29,7 +30,7 @@ pub use crate::redis::Redis;
 pub trait Config: Send + Sync + Default{
     fn new(env_var: &str) -> Self
     where
-        Self: Sized + for<'a> Deserialize<'a>,
+        Self: Sized + for<'a> Deserialize<'a> + Debug,
     {
         let path = match std::env::var(env_var) {
             Ok(path) => path,
@@ -43,6 +44,7 @@ pub trait Config: Send + Sync + Default{
         if let Err(e) = config.update() {
             panic!("failed to update config {:?}: {:?}", path, e);
         };
+        info!("debug config:{config:?}");
         config
     }
 
@@ -87,7 +89,7 @@ where
     while let Some(event) = rx.recv().await {
         event_reactor(&event?, config, notif).await?;
         #[cfg(test)]
-        return Ok(());
+                return Ok(());
     }
     Err(anyhow!("watch error: channel as been closed!"))
 }
