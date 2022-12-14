@@ -2,7 +2,6 @@ use std::{
     marker::{Send, Sized, Sync},
     path::Path,
     sync::Arc,
-    fmt::Debug
 };
 
 use anyhow::{anyhow, bail, Result};
@@ -30,7 +29,7 @@ pub use crate::redis::Redis;
 pub trait Config: Send + Sync + Default{
     fn new(env_var: &str) -> Self
     where
-        Self: Sized + for<'a> Deserialize<'a> + Debug,
+        Self: Sized + for<'a> Deserialize<'a>,
     {
         let path = match std::env::var(env_var) {
             Ok(path) => path,
@@ -44,7 +43,6 @@ pub trait Config: Send + Sync + Default{
         if let Err(e) = config.update() {
             panic!("failed to update config {:?}: {:?}", path, e);
         };
-        info!("debug config:{config:?}");
         config
     }
 
@@ -162,7 +160,7 @@ mod test_config {
 
     use super::*;
 
-    #[derive(Deserialize, Default, Clone)]
+    #[derive(Deserialize, Default, Clone, PartialEq, Eq, Debug)]
     pub struct TestConfig {
         pub salt: String,
         pub salt_length: usize,
@@ -195,7 +193,7 @@ mod test_config {
             Ok(())
         }
 
-        fn new(env_var: &str) -> Self
+        /* fn new(env_var: &str) -> Self
     where
         Self: Sized + for<'a> Deserialize<'a>,
     {
@@ -212,7 +210,19 @@ mod test_config {
             panic!("failed to update config {:?}: {:?}", path, e);
         };
         config
+    } */
     }
+
+    #[test]
+    fn test_config_new(){
+        let expected = TestConfig{
+            salt: "test".to_owned(),
+            salt_length: 200,
+            path: Some(PathBuf::from("test/config.yaml"))
+        };
+        std::env::set_var("CONFIG", PATH);
+        let config = TestConfig::new("CONFIG");
+        assert_eq!(config, expected)
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
