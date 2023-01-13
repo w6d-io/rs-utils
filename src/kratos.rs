@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 use log::{debug, info};
-use ory_kratos_client::apis::{configuration::Configuration, v0alpha2_api::to_session};
+use ory_kratos_client::apis::{configuration::Configuration, frontend_api::to_session};
 use rocket::http::Cookie;
 use serde::Deserialize;
 

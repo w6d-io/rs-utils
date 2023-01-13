@@ -5,6 +5,8 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, Result};
+#[cfg(not(test))]
+use log::warn;
 use log::{debug, info};
 use notify::{
     event::{AccessKind, AccessMode, Event, EventKind},
@@ -26,7 +28,7 @@ pub use crate::minio::Minio;
 #[cfg(feature = "redis")]
 pub use crate::redis::Redis;
 
-pub trait Config: Send + Sync + Default{
+pub trait Config: Send + Sync + Default {
     fn new(path: &str) -> Self
     where
         Self: Sized + for<'a> Deserialize<'a>,
@@ -80,7 +82,7 @@ where
     while let Some(event) = rx.recv().await {
         event_reactor(&event?, config, notif).await?;
         #[cfg(test)]
-                return Ok(());
+        return Ok(());
     }
     Err(anyhow!("watch error: channel as been closed!"))
 }
@@ -150,6 +152,7 @@ mod test_config {
         providers::{Format, Yaml},
         Figment,
     };
+    use log::warn;
 
     use super::*;
 
@@ -175,10 +178,12 @@ mod test_config {
                 None => bail!("config file path not set"),
             };
             match path.try_exists() {
-                Ok(exists) => {if !exists {
-                    bail!("config was not found");
-                }},
-                Err(e) => bail!(e)
+                Ok(exists) => {
+                    if !exists {
+                        bail!("config was not found");
+                    }
+                }
+                Err(e) => bail!(e),
             }
             let mut figment: TestConfig = Figment::new().merge(Yaml::file(path)).extract()?;
             figment.path = Some(path.to_path_buf());
@@ -187,54 +192,66 @@ mod test_config {
         }
 
         /* fn new(env_var: &str) -> Self
-    where
-        Self: Sized + for<'a> Deserialize<'a>,
-    {
-        let path = match std::env::var(env_var) {
-            Ok(path) => path,
-            Err(e) => {
-                warn!("error while reading environment variable: {e}, switching to fallback.");
-                "tests/config.toml".to_owned()
-            }
-        };
-        let mut config = Self::default();
-        config.set_path(path.clone());
-        if let Err(e) = config.update() {
-            panic!("failed to update config {:?}: {:?}", path, e);
-        };
-        config
-    } */
+        where
+            Self: Sized + for<'a> Deserialize<'a>,
+        {
+            let path = match std::env::var(env_var) {
+                Ok(path) => path,
+                Err(e) => {
+                    warn!("error while reading environment variable: {e}, switching to fallback.");
+                    "tests/config.toml".to_owned()
+                }
+            };
+            let mut config = Self::default();
+            config.set_path(path.clone());
+            if let Err(e) = config.update() {
+                panic!("failed to update config {:?}: {:?}", path, e);
+            };
+            config
+        } */
     }
 
     #[test]
-    fn test_config_new(){
-        let expected = TestConfig{
+    fn test_config_new() {
+        let expected = TestConfig {
             salt: "test".to_owned(),
             salt_length: 200,
-            path: Some(PathBuf::from("test/config.yaml"))
+            path: Some(PathBuf::from("test/config.yaml")),
         };
         std::env::set_var("CONFIG", PATH);
-        let config = TestConfig::new("CONFIG");
+        let config_path = std::env::var("CONFIG").unwrap_or_else(|_| {
+            warn!("config variable not found switching to fallback");
+            PATH.to_owned()
+        });
+        let config = TestConfig::new(&config_path);
         assert_eq!(config, expected)
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_event_reactor() {
         std::env::set_var("CONFIG", PATH);
+        let config_path = std::env::var("CONFIG").unwrap_or_else(|_| {
+            warn!("config variable not found switching to fallback");
+            PATH.to_owned()
+        });
         let path = PATH;
         let event = notify::event::Event {
             kind: EventKind::Access(AccessKind::Close(AccessMode::Write)),
             paths: vec![Path::new(path).to_path_buf()],
             attrs: notify::event::EventAttributes::new(),
         };
-        let config = Arc::new(RwLock::new(TestConfig::new("CONFIG")));
+        let config = Arc::new(RwLock::new(TestConfig::new(&config_path)));
         event_reactor(&event, &config.clone(), &None).await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_event_poll() {
         std::env::set_var("CONFIG", PATH);
-        let config = Arc::new(RwLock::new(TestConfig::new("CONFIG")));
+        let config_path = std::env::var("CONFIG").unwrap_or_else(|_| {
+            warn!("config variable not found switching to fallback");
+            PATH.to_owned()
+        });
+        let config = Arc::new(RwLock::new(TestConfig::new(&config_path)));
         let (tx, rx) = channel(1);
         let path = PATH;
         let event = notify::event::Event {
@@ -249,7 +266,11 @@ mod test_config {
     #[tokio::test]
     async fn test_event_poll_closed_chanel() {
         std::env::set_var("CONFIG", PATH);
-        let config = Arc::new(RwLock::new(TestConfig::new("CONFIG")));
+        let config_path = std::env::var("CONFIG").unwrap_or_else(|_| {
+            warn!("config variable not found switching to fallback");
+            PATH.to_owned()
+        });
+        let config = Arc::new(RwLock::new(TestConfig::new(&config_path)));
         let (tx, rx) = channel(1);
         drop(tx);
         let res = event_poll(rx, &config.clone(), &None).await;
@@ -259,7 +280,11 @@ mod test_config {
     #[tokio::test]
     async fn test_config_watcher() {
         std::env::set_var("CONFIG", PATH);
-        let config = Arc::new(RwLock::new(TestConfig::new("CONFIG")));
+        let config_path = std::env::var("CONFIG").unwrap_or_else(|_| {
+            warn!("config variable not found switching to fallback");
+            PATH.to_owned()
+        });
+        let config = Arc::new(RwLock::new(TestConfig::new(&config_path)));
         let res = config_watcher(PATH, &config.clone(), &None).await;
         assert!(res.is_ok());
     }
