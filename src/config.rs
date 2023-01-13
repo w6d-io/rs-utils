@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, Result};
-use log::{debug, info, warn};
+use log::{debug, info};
 use notify::{
     event::{AccessKind, AccessMode, Event, EventKind},
     RecommendedWatcher, RecursiveMode, Watcher,
@@ -27,19 +27,12 @@ pub use crate::minio::Minio;
 pub use crate::redis::Redis;
 
 pub trait Config: Send + Sync + Default{
-    fn new(env_var: &str) -> Self
+    fn new(path: &str) -> Self
     where
         Self: Sized + for<'a> Deserialize<'a>,
     {
-        let path = match std::env::var(env_var) {
-            Ok(path) => path,
-            Err(e) => {
-                warn!("error while reading environment variable: {e}, switching to fallback.");
-                "tests/config.toml".to_owned()
-            }
-        };
         let mut config = Self::default();
-        config.set_path(path.clone());
+        config.set_path(path);
         if let Err(e) = config.update() {
             panic!("failed to update config {:?}: {:?}", path, e);
         };
