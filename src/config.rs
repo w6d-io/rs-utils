@@ -1,5 +1,5 @@
 use std::{
-    marker::{Send, Sized, Sync},
+    marker::Sized,
     path::Path,
     sync::Arc,
 };
@@ -20,6 +20,7 @@ use tokio::{
         watch, RwLock,
     },
 };
+use async_trait::async_trait;
 
 #[cfg(feature = "kratos")]
 pub use crate::kratos::Kratos;
@@ -28,21 +29,22 @@ pub use crate::minio::Minio;
 #[cfg(feature = "redis")]
 pub use crate::redis::Redis;
 
-pub trait Config: Send + Sync + Default {
-    fn new(path: &str) -> Self
+#[async_trait]
+pub trait Config: Default {
+    async fn new(path: &str) -> Self
     where
         Self: Sized + for<'a> Deserialize<'a>,
     {
         let mut config = Self::default();
         config.set_path(path);
-        if let Err(e) = config.update() {
+        if let Err(e) = config.update().await {
             panic!("failed to update config {:?}: {:?}", path, e);
         };
         config
     }
 
     fn set_path<T: AsRef<Path>>(&mut self, path: T) -> &mut Self;
-    fn update(&mut self) -> Result<()>
+    async fn update(&mut self) -> Result<()>
     where
         Self: Sized;
 }
@@ -59,7 +61,7 @@ where
     if let EventKind::Access(AccessKind::Close(AccessMode::Write)) = event.kind {
         debug!("file changed: {:?}", event);
         let mut conf = config.write().await;
-        conf.update()?;
+        conf.update().await?;
         println!("sending change notiffication.");
         if let Some(n) = notif {
             println!("receiver:{}", n.receiver_count());
@@ -164,7 +166,8 @@ mod test_config {
     }
 
     const PATH: &str = "test/config.yaml";
-
+    
+    #[async_trait]
     impl Config for TestConfig {
         fn set_path<T: AsRef<Path>>(&mut self, path: T) -> &mut Self {
             self.path = Some(path.as_ref().to_owned());
@@ -172,7 +175,7 @@ mod test_config {
         }
 
         ///update the config in the static variable
-        fn update(&mut self) -> Result<()> {
+        async fn update(&mut self) -> Result<()> {
             let path = match self.path {
                 Some(ref path) => path as &Path,
                 None => bail!("config file path not set"),
@@ -211,8 +214,8 @@ mod test_config {
         } */
     }
 
-    #[test]
-    fn test_config_new() {
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_config_new() {
         let expected = TestConfig {
             salt: "test".to_owned(),
             salt_length: 200,
@@ -223,7 +226,7 @@ mod test_config {
             warn!("config variable not found switching to fallback");
             PATH.to_owned()
         });
-        let config = TestConfig::new(&config_path);
+        let config = TestConfig::new(&config_path).await;
         assert_eq!(config, expected)
     }
 
@@ -240,7 +243,7 @@ mod test_config {
             paths: vec![Path::new(path).to_path_buf()],
             attrs: notify::event::EventAttributes::new(),
         };
-        let config = Arc::new(RwLock::new(TestConfig::new(&config_path)));
+        let config = Arc::new(RwLock::new(TestConfig::new(&config_path).await));
         event_reactor(&event, &config.clone(), &None).await.unwrap();
     }
 
@@ -251,7 +254,7 @@ mod test_config {
             warn!("config variable not found switching to fallback");
             PATH.to_owned()
         });
-        let config = Arc::new(RwLock::new(TestConfig::new(&config_path)));
+        let config = Arc::new(RwLock::new(TestConfig::new(&config_path).await));
         let (tx, rx) = channel(1);
         let path = PATH;
         let event = notify::event::Event {
@@ -270,7 +273,7 @@ mod test_config {
             warn!("config variable not found switching to fallback");
             PATH.to_owned()
         });
-        let config = Arc::new(RwLock::new(TestConfig::new(&config_path)));
+        let config = Arc::new(RwLock::new(TestConfig::new(&config_path).await));
         let (tx, rx) = channel(1);
         drop(tx);
         let res = event_poll(rx, &config.clone(), &None).await;
@@ -284,7 +287,7 @@ mod test_config {
             warn!("config variable not found switching to fallback");
             PATH.to_owned()
         });
-        let config = Arc::new(RwLock::new(TestConfig::new(&config_path)));
+        let config = Arc::new(RwLock::new(TestConfig::new(&config_path).await));
         let res = config_watcher(PATH, &config.clone(), &None).await;
         assert!(res.is_ok());
     }
