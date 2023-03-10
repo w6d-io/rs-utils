@@ -27,7 +27,7 @@ rand = "^0.8"
 
 [features]
 default = ["kratos", "anyhow-rocket", "minio", "redis"]
-kratos = ["dep:ory-kratos-client", "dep:rocket", "dep:serde"]
+kratos = ["dep:ory-kratos-client", "dep:serde"]
 anyhow-rocket = ["dep:rocket"]
 minio = ["dep:rust-s3", "dep:serde", "dep:time"]
 redis = ["dep:serde", "dep:redis"]

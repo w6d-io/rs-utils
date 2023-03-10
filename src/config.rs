@@ -1,10 +1,7 @@
-use std::{
-    marker::Sized,
-    path::Path,
-    sync::Arc,
-};
+use std::{marker::Sized, path::Path, sync::Arc};
 
 use anyhow::{anyhow, bail, Result};
+use async_trait::async_trait;
 #[cfg(not(test))]
 use log::warn;
 use log::{debug, info};
@@ -20,7 +17,6 @@ use tokio::{
         watch, RwLock,
     },
 };
-use async_trait::async_trait;
 
 #[cfg(feature = "kratos")]
 pub use crate::kratos::Kratos;
@@ -166,7 +162,7 @@ mod test_config {
     }
 
     const PATH: &str = "test/config.yaml";
-    
+
     #[async_trait]
     impl Config for TestConfig {
         fn set_path<T: AsRef<Path>>(&mut self, path: T) -> &mut Self {

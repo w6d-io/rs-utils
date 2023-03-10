@@ -1,7 +1,8 @@
+use std::fmt::Display;
+
 use anyhow::{bail, Result};
 use log::{debug, info};
 use ory_kratos_client::apis::{configuration::Configuration, frontend_api::to_session};
-use rocket::http::Cookie;
 use serde::Deserialize;
 
 pub use ory_kratos_client::models::Identity;
@@ -27,7 +28,10 @@ impl Kratos {
     ///validate a katos session cookie.
     ///return the user identity.
     ///return an error if its invalid or the cookie is not present.
-    pub async fn validate_session(&self, cookie: &Cookie<'_>) -> Result<Identity> {
+    pub async fn validate_session<T>(&self, cookie: &T) -> Result<Identity>
+    where
+        T: Display,
+    {
         let kratos_client = match self.client {
             Some(ref client) => client,
             None => {
