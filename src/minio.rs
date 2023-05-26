@@ -5,11 +5,10 @@ use log::{debug, warn};
 // use reqwest::StatusCode;
 use crate::config;
 use s3::{
-    creds::Credentials, error::S3Error, region::Region, request_trait::ResponseData,
+    creds::{Credentials, Rfc3339OffsetDateTime}, error::S3Error, region::Region, request::ResponseData,
     serde_types::Object, Bucket,
 };
 use serde::Deserialize;
-use time::OffsetDateTime;
 
 #[derive(Deserialize, Clone, Debug, Default)]
 pub struct Minio {
@@ -19,7 +18,7 @@ pub struct Minio {
     pub secret_key: Option<String>,
     pub security_token: Option<String>,
     pub session_token: Option<String>,
-    pub expiration: Option<OffsetDateTime>,
+    pub expiration: Option<Rfc3339OffsetDateTime>,
     #[serde(skip_deserializing)]
     pub client: Option<Client>,
     #[serde(skip_deserializing)]
