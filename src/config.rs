@@ -1,10 +1,10 @@
-use std::{marker::Sized, path::Path, sync::Arc};
+use std::{marker::Sized, path::Path, sync::Arc, thread::sleep, time::Duration};
 
 use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
 #[cfg(not(test))]
 use log::warn;
-use log::{debug, info};
+use log::{debug, info, error};
 use notify::{
     event::{AccessKind, AccessMode, Event, EventKind},
     RecommendedWatcher, RecursiveMode, Watcher,
@@ -33,9 +33,23 @@ pub trait Config: Default {
     {
         let mut config = Self::default();
         config.set_path(path);
-        if let Err(e) = config.update().await {
-            panic!("failed to update config {:?}: {:?}", path, e);
-        };
+        let mut duration = 30;
+        for retry in 0..4 {
+            if retry > 0 {
+                sleep(Duration::from_secs(duration));
+                duration = duration + duration * retry;
+                info!("trying to reload config. retry:{}", retry);
+            }
+            if let Err(e) = config.update().await {
+                if retry > 3{
+                    panic!("failed to load config after 3e try {:?}: {:?}", path, e)
+                } else {
+                    error!("failed to load config {:?}: {:?}", path, e);
+                    info!("waiting {}s before reloading.", duration);
+                }
+            };
+
+        }
         config
     }
 
