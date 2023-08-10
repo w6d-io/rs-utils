@@ -47,7 +47,9 @@ pub trait Config: Default {
                     error!("failed to load config {:?}: {:?}", path, e);
                     info!("waiting {}s before reloading.", duration);
                 }
-            };
+            }else {
+                break;
+            }
 
         }
         config
