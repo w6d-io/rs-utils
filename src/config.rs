@@ -29,7 +29,7 @@ pub use crate::redis::Redis;
 pub trait Config: Default {
     async fn new(path: &str) -> Self
     where
-        Self: Sized + for<'a> Deserialize<'a>,
+        Self: Sized + for<'a> Deserialize<'a> + std::fmt::Debug,
     {
         let mut config = Self::default();
         config.set_path(path);
