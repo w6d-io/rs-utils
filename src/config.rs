@@ -48,7 +48,7 @@ pub trait Config: Default {
                     info!("waiting {}s before reloading.", duration);
                 }
             }else {
-                info!("{:#?}", config);
+                debug!("lauching with config: {:#?}", config);
                 break;
             }
 
