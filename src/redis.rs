@@ -100,7 +100,7 @@ impl Client {
     ///Connect the client to the redis server, it will try to reconnect
     ///automatically if an error is encountered.
     pub async fn connect(&mut self) -> Result<&mut Self> {
-        let conection = self.client.get_tokio_connection_manager().await?;
+        let conection = self.client.get_connection_manager().await?;
         self.connection = Some(conection);
         Ok(self)
     }
