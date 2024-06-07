@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use log::{debug, info};
 use ory_kratos_client::apis::{configuration::Configuration, frontend_api::to_session};
 use serde::Deserialize;
@@ -32,17 +32,17 @@ impl Kratos {
     where
         T: Display,
     {
-        let kratos_client = match self.client {
-            Some(ref client) => client,
-            None => {
-                bail!("kratos is not initialized!");
-            }
+        let Some(ref kratos_client) = self.client else {
+            bail!("kratos is not initialized!");
         };
         info!("validating session cookie");
         debug!("session cookie: {cookie}");
-        let session = to_session(kratos_client, None, Some(&cookie.to_string())).await?;
+        let session = to_session(kratos_client, None, Some(&cookie.to_string()), None).await?;
+        let identity = *session
+            .identity
+            .ok_or_else(|| anyhow!("Session do not contain an identity!"))?;
         info!("session cookie successfully validated");
-        Ok(*session.identity)
+        Ok(identity)
     }
 }
 

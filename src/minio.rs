@@ -5,8 +5,12 @@ use log::{debug, warn};
 // use reqwest::StatusCode;
 use crate::config;
 use s3::{
-    creds::{Credentials, Rfc3339OffsetDateTime}, error::S3Error, region::Region, request::ResponseData,
-    serde_types::Object, Bucket,
+    creds::{Credentials, Rfc3339OffsetDateTime},
+    error::S3Error,
+    region::Region,
+    request::ResponseData,
+    serde_types::Object,
+    Bucket,
 };
 use serde::Deserialize;
 
@@ -34,12 +38,11 @@ impl Minio {
 
     ///fetch the secret from the environment
     pub fn set_secrets(&mut self) -> &mut Self {
-        let prefix = match self.prefix {
-            Some(ref pref) => pref.to_owned(),
-            None => {
-                warn!("No prefix provided!");
-                return self;
-            }
+        let prefix = if let Some(ref pref) = self.prefix {
+            pref.to_owned()
+        } else {
+            warn!("No prefix provided!");
+            return self;
         };
         self.access_key = env::var(prefix.clone() + "_AWS_ACCESS_KEY")
             .ok()

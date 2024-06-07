@@ -6,7 +6,7 @@ use serde::Deserialize;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum RedisError {
+pub enum Error {
     #[error("redis error: {0}")]
     Redis(#[from] redis::RedisError),
     #[error("Not yet connected to the redis server.")]
@@ -15,7 +15,7 @@ pub enum RedisError {
     NoPassword,
 }
 
-type Result<T> = std::result::Result<T, RedisError>;
+type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct Redis {
@@ -37,16 +37,16 @@ impl Redis {
 
     ///fetch the secret from the environment
     pub fn set_secrets(&mut self) -> &mut Self {
-        let prefix = match self.prefix {
-            Some(ref pref) => pref.to_owned(),
-            None => {
-                warn!("No prefix provided!");
-                return self;
-            }
+        let prefix = if let Some(ref pref) = self.prefix {
+            pref.to_owned()
+        } else {
+            warn!("No prefix provided!");
+            return self;
         };
+
         self.password = env::var(prefix + "_REDIS_PASSWORD").ok().or_else(|| {
             if self.password.is_some() {
-                self.password.to_owned()
+                self.password.clone()
             } else {
                 None
             }
@@ -73,7 +73,7 @@ fn construc_uri(addr: &str, user: &Option<String>, password: &Option<String>) ->
         }
         None => {
             if user.is_some() {
-                return Err(RedisError::NoPassword);
+                return Err(Error::NoPassword);
             }
         }
     }
@@ -108,7 +108,7 @@ impl Client {
     pub async fn hset(&self, key: &str, field: &str, value: &str) -> Result<()> {
         let mut connection = match self.connection {
             Some(ref connection) => connection.clone(),
-            None => return Err(RedisError::Connection),
+            None => return Err(Error::Connection),
         };
         Cmd::hset_nx(key, field, value)
             .query_async(&mut connection)
@@ -120,7 +120,7 @@ impl Client {
     pub async fn hexists(&self, key: &str, field: &str) -> Result<bool> {
         let mut connection = match self.connection {
             Some(ref connection) => connection.clone(),
-            None => return Err(RedisError::Connection),
+            None => return Err(Error::Connection),
         };
         let res: bool = Cmd::hexists(key, field)
             .query_async(&mut connection)
@@ -132,7 +132,7 @@ impl Client {
     pub async fn exists(&self, key: &str) -> Result<bool> {
         let mut connection = match self.connection {
             Some(ref connection) => connection.clone(),
-            None => return Err(RedisError::Connection),
+            None => return Err(Error::Connection),
         };
         let res: bool = Cmd::exists(key).query_async(&mut connection).await?;
         Ok(res)
@@ -141,7 +141,7 @@ impl Client {
     pub async fn ping(&self) -> Result<()> {
         let mut connection = match self.connection {
             Some(ref connection) => connection.clone(),
-            None => return Err(RedisError::Connection),
+            None => return Err(Error::Connection),
         };
         redis::cmd("PING").query_async(&mut connection).await?;
         Ok(())

@@ -4,7 +4,7 @@ use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
 #[cfg(not(test))]
 use log::warn;
-use log::{debug, info, error};
+use log::{debug, error, info};
 use notify::{
     event::{AccessKind, AccessMode, Event, EventKind},
     RecommendedWatcher, RecursiveMode, Watcher,
@@ -41,17 +41,16 @@ pub trait Config: Default {
                 info!("trying to reload config. retry:{}", retry);
             }
             if let Err(e) = config.update().await {
-                if retry > 3{
-                    panic!("failed to load config after 3e try {:?}: {:?}", path, e)
+                if retry > 3 {
+                    panic!("failed to load config after 3e try {path:?}: {e:?}")
                 } else {
                     error!("failed to load config {:?}: {:?}", path, e);
                     info!("waiting {}s before reloading.", duration);
                 }
-            }else {
+            } else {
                 debug!("lauching with config: {:#?}", config);
                 break;
             }
-
         }
         config
     }
@@ -123,7 +122,7 @@ where
                 tx.send(res)
                     .await
                     .expect("something went wrong with the watcher channel");
-            })
+            });
         },
         notify::Config::default(),
     )?;
